@@ -1,0 +1,61 @@
+name: 🧠 Daily CP Code Publisher
+
+on:
+  schedule:
+    - cron: '0 20 * * *'  # Every day at 6:00 UTC
+  workflow_dispatch:     # Allow manual trigger
+
+jobs:
+  publish-code:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Public Repo
+      uses: actions/checkout@v4
+      with:
+        path: public-repo
+
+    - name: Clone Private Repo
+      run: |
+        git clone https://x-access-token:${{ secrets.GH_PAT }}@github.com/asicoltd/cp-private-dump.git private-repo
+
+    - name: Find Unpublished Code
+      id: find
+      run: |
+        file_to_publish=""
+        while IFS= read -r -d '' file; do
+          rel_path=${file#private-repo/}
+          if [ ! -f "public-repo/$rel_path" ]; then
+            file_to_publish="$rel_path"
+            mkdir -p "$(dirname "public-repo/$rel_path")"
+            cp "$file" "public-repo/$rel_path"
+            echo "Found: $rel_path"
+            echo "file=$rel_path" >> $GITHUB_OUTPUT
+            break
+          fi
+        done < <(find private-repo -type f -print0)
+
+        if [ -z "$file_to_publish" ]; then
+          echo "No new file to publish."
+          exit 0
+        fi
+
+    - name: Commit and Push to Public Repo
+      if: steps.find.outputs.file != ''
+      run: |
+        cd public-repo
+        git config user.name "AutoPublisher Bot"
+        git config user.email "bot@github.com"
+        git add "${{ steps.find.outputs.file }}"
+        git commit -m "📘 Daily CP: ${{ steps.find.outputs.file }} on $(date +'%Y-%m-%d')"
+        git push
+
+    - name: Remove from Private Repo
+      if: steps.find.outputs.file != ''
+      run: |
+        cd private-repo
+        git config user.name "AutoPublisher Bot"
+        git config user.email "bot@github.com"
+        git rm "${{ steps.find.outputs.file }}"
+        git commit -m "🗑️ Removed published file: ${{ steps.find.outputs.file }}"
+        git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/asicoltd/cp-private-dump.git HEAD:main
