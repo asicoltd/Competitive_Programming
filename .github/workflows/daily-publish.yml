@@ -2,7 +2,7 @@ name: Daily CP Code Publisher
 
 on:
   schedule:
-    - cron: '45 12 * * *'  # Runs 2:30 AM Bangladesh time (8:30 PM UTC)
+    - cron: '0 7 * * *'  # Runs every day at 1:00 PM Bangladesh time
   workflow_dispatch:
 
 jobs:
