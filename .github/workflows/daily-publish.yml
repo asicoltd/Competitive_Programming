@@ -1,61 +1,87 @@
-name: 🧠 Daily CP Code Publisher
+name: Daily CP Code Publisher
 
 on:
   schedule:
-    - cron: '0 20 * * *'  # Every day at 6:00 UTC
-  workflow_dispatch:     # Allow manual trigger
+    - cron: '45 12 * * *'  # Runs 2:30 AM Bangladesh time (8:30 PM UTC)
+  workflow_dispatch:
 
 jobs:
   publish-code:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Public Repo
-      uses: actions/checkout@v4
-      with:
-        path: public-repo
+      - name: Checkout Public Repo
+        uses: actions/checkout@v3
+        with:
+          path: public-repo
 
-    - name: Clone Private Repo
-      run: |
-        git clone https://x-access-token:${{ secrets.GH_PAT }}@github.com/asicoltd/cp-private-dump.git private-repo
+      - name: Clone Private Repo
+        uses: actions/checkout@v3
+        with:
+          repository: asicoltd/cp-private-dump
+          token: ${{ secrets.PRIVATE_REPO_ACCESS_TOKEN }}
+          path: private-repo
 
-    - name: Find Unpublished Code
-      id: find
-      run: |
-        file_to_publish=""
-        while IFS= read -r -d '' file; do
-          rel_path=${file#private-repo/}
-          if [ ! -f "public-repo/$rel_path" ]; then
-            file_to_publish="$rel_path"
-            mkdir -p "$(dirname "public-repo/$rel_path")"
-            cp "$file" "public-repo/$rel_path"
-            echo "Found: $rel_path"
-            echo "file=$rel_path" >> $GITHUB_OUTPUT
-            break
+      - name: Find and Publish Unpublished File
+        run: |
+          mkdir -p public-repo/_temp
+          echo "🔍 Scanning for unpublished code..."
+
+          FOUND_FILE=false
+
+          for folder in $(find private-repo -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort); do
+            echo "📁 Checking folder: $folder"
+
+            mkdir -p "public-repo/$folder"
+
+            for file in $(find "private-repo/$folder" -type f | sort); do
+              filename=$(basename "$file")
+              dest="public-repo/$folder/$filename"
+
+              if [ ! -f "$dest" ]; then
+                echo "🆕 Publishing: $filename"
+                cp "$file" "$dest"
+                rm "$file"
+                echo "❌ Removed from private repo: $filename"
+                FOUND_FILE=true
+                break 2
+              fi
+            done
+          done
+
+          if [ "$FOUND_FILE" = false ]; then
+            echo "🟡 No new code found to publish. Exiting."
+            exit 0
           fi
-        done < <(find private-repo -type f -print0)
 
-        if [ -z "$file_to_publish" ]; then
-          echo "No new file to publish."
-          exit 0
-        fi
+      - name: Commit and Push to Public Repo
+        run: |
+          cd public-repo
+          git config user.name "AutoPublisher Bot"
+          git config user.email "bot@github.com"
+          git add .
 
-    - name: Commit and Push to Public Repo
-      if: steps.find.outputs.file != ''
-      run: |
-        cd public-repo
-        git config user.name "AutoPublisher Bot"
-        git config user.email "bot@github.com"
-        git add "${{ steps.find.outputs.file }}"
-        git commit -m "📘 Daily CP: ${{ steps.find.outputs.file }} on $(date +'%Y-%m-%d')"
-        git push
+          if git diff --cached --quiet; then
+            echo "🟡 Nothing to commit."
+            exit 0
+          else
+            git commit -m "📤 Auto-published one new CP solution from private repo"
+            git push
+            echo "✅ Public repo updated."
+          fi
 
-    - name: Remove from Private Repo
-      if: steps.find.outputs.file != ''
-      run: |
-        cd private-repo
-        git config user.name "AutoPublisher Bot"
-        git config user.email "bot@github.com"
-        git rm "${{ steps.find.outputs.file }}"
-        git commit -m "🗑️ Removed published file: ${{ steps.find.outputs.file }}"
-        git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/asicoltd/cp-private-dump.git HEAD:main
+      - name: Commit and Push to Private Repo (Remove File)
+        run: |
+          cd private-repo
+          git config user.name "AutoPublisher Bot"
+          git config user.email "bot@github.com"
+          git add -u
+
+          if git diff --cached --quiet; then
+            echo "🟡 No deletions to commit."
+            exit 0
+          else
+            git commit -m "🗑️ Removed published code after transfer"
+            git push
+            echo "✅ Private repo cleaned up."
+          fi
