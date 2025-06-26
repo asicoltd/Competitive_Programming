@@ -33,8 +33,15 @@ jobs:
           cd public-repo
           git config user.name "AutoPublisher Bot"
           git config user.email "bot@github.com"
+          
+          # If repo has no commits, create an initial commit
+          if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+            echo "No commits found. Creating initial commit..."
+            git commit --allow-empty -m "Initial commit"
+          fi
+          
           git add .
-
+          
           if git diff --cached --quiet; then
             echo "🟡 Nothing to commit."
             exit 0
