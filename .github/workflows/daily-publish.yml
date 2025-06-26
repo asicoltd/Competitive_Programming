@@ -2,7 +2,7 @@ name: Daily CP Code Publisher
 
 on:
   schedule:
-    - cron: '40 7 * * *'  # Runs every day at 1:00 PM Bangladesh time
+    - cron: '40 7 * * *'  # Runs every day at 1:00 PM Bangladesh time (UTC+6)
   workflow_dispatch:
 
 jobs:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Public Repo
+      - name: Checkout Public Repo (This repo)
         uses: actions/checkout@v3
         with:
           path: public-repo
@@ -26,7 +26,7 @@ jobs:
         run: |
           echo "📂 Copying all files from private to public repo..."
 
-          # Copy and list all copied files
+          # Perform sync and log file names
           rsync -a --delete --info=NAME private-repo/ public-repo/ | tee copied_files.log
 
           echo "📄 Files copied:"
@@ -39,15 +39,15 @@ jobs:
           cd public-repo
           git config user.name "AutoPublisher Bot"
           git config user.email "bot@github.com"
-          
-          # If repo has no commits, create an initial commit
+
+          # Handle initial commit if the repo is empty
           if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
             echo "No commits found. Creating initial commit..."
-            git commit --allow-empty -m "Initial commit"
+            git commit --allow-empty -m "🚀 Initial commit"
           fi
-          
+
           git add .
-          
+
           if git diff --cached --quiet; then
             echo "🟡 Nothing to commit."
             exit 0
