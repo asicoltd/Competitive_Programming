@@ -25,7 +25,13 @@ jobs:
       - name: Copy All Files from Private to Public
         run: |
           echo "📂 Copying all files from private to public repo..."
-          rsync -a --delete private-repo/ public-repo/
+
+          # Copy and list all copied files
+          rsync -a --delete --info=NAME private-repo/ public-repo/ | tee copied_files.log
+
+          echo "📄 Files copied:"
+          cat copied_files.log
+
           echo "✅ Copy complete."
 
       - name: Commit and Push to Public Repo
