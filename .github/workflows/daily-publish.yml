@@ -24,9 +24,13 @@ jobs:
 
       - name: Copy All Files from Private to Public
         run: |
-          echo "📂 Copying all files from private to public repo..."
+          PRIVATE_REPO_NAME="cp-private-dump"
+          PUBLIC_REPO_NAME="$(basename "$(git -C public-repo config --get remote.origin.url)" .git)"
 
-          # Perform sync and log file names
+          echo "🔄 Copying from PRIVATE repo: $PRIVATE_REPO_NAME"
+          echo "➡️  To PUBLIC repo: $PUBLIC_REPO_NAME"
+
+          echo "📂 Copying all files from private-repo/ to public-repo/..."
           rsync -a --delete --info=NAME private-repo/ public-repo/ | tee copied_files.log
 
           echo "📄 Files copied:"
