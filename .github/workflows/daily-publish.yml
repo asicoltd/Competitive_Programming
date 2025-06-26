@@ -22,37 +22,11 @@ jobs:
           token: ${{ secrets.PRIVATE_REPO_ACCESS_TOKEN }}
           path: private-repo
 
-      - name: Find and Publish Unpublished File
+      - name: Copy All Files from Private to Public
         run: |
-          mkdir -p public-repo/_temp
-          echo "🔍 Scanning for unpublished code..."
-
-          FOUND_FILE=false
-
-          for folder in $(find private-repo -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort); do
-            echo "📁 Checking folder: $folder"
-
-            mkdir -p "public-repo/$folder"
-
-            for file in $(find "private-repo/$folder" -type f | sort); do
-              filename=$(basename "$file")
-              dest="public-repo/$folder/$filename"
-
-              if [ ! -f "$dest" ]; then
-                echo "🆕 Publishing: $filename"
-                cp "$file" "$dest"
-                rm "$file"
-                echo "❌ Removed from private repo: $filename"
-                FOUND_FILE=true
-                break 2
-              fi
-            done
-          done
-
-          if [ "$FOUND_FILE" = false ]; then
-            echo "🟡 No new code found to publish. Exiting."
-            exit 0
-          fi
+          echo "📂 Copying all files from private to public repo..."
+          rsync -a --delete private-repo/ public-repo/
+          echo "✅ Copy complete."
 
       - name: Commit and Push to Public Repo
         run: |
@@ -65,23 +39,7 @@ jobs:
             echo "🟡 Nothing to commit."
             exit 0
           else
-            git commit -m "📤 Auto-published one new CP solution from private repo"
+            git commit -m "📤 Auto-synced full private repo to public"
             git push
             echo "✅ Public repo updated."
-          fi
-
-      - name: Commit and Push to Private Repo (Remove File)
-        run: |
-          cd private-repo
-          git config user.name "AutoPublisher Bot"
-          git config user.email "bot@github.com"
-          git add -u
-
-          if git diff --cached --quiet; then
-            echo "🟡 No deletions to commit."
-            exit 0
-          else
-            git commit -m "🗑️ Removed published code after transfer"
-            git push
-            echo "✅ Private repo cleaned up."
           fi
