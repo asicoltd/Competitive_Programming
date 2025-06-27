@@ -2,7 +2,7 @@ name: Daily CP Code Publisher
 
 on:
   schedule:
-    - cron: '40 7 * * *'  # Runs every day at 1:00 PM Bangladesh time (UTC+6)
+    - cron: '40 7 * * *'  # Every day at 1:00 PM Bangladesh time (UTC+6)
   workflow_dispatch:
 
 jobs:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Public Repo (This repo)
+      - name: Checkout Public Repo
         uses: actions/checkout@v3
         with:
           path: public-repo
@@ -22,41 +22,39 @@ jobs:
           token: ${{ secrets.PRIVATE_REPO_ACCESS_TOKEN }}
           path: private-repo
 
-      - name: Copy All Files from Private to Public
+      - name: Clean Public Repo (Preserve .git and .github)
         run: |
-          PRIVATE_REPO_NAME="cp-private-dump"
-          PUBLIC_REPO_NAME="$(basename "$(git -C public-repo config --get remote.origin.url)" .git)"
+          cd public-repo
+          # Move critical directories to temporary location
+          mv .git ../
+          if [ -d .github ]; then
+            mv .github ../
+          fi
+          # Delete everything else
+          find . -mindepth 1 -delete
+          # Restore critical directories
+          mv ../.git .
+          if [ -d ../.github ]; then
+            mv ../.github .
+          fi
+          cd ..
 
-          echo "🔄 Copying from PRIVATE repo: $PRIVATE_REPO_NAME"
-          echo "➡️  To PUBLIC repo: $PUBLIC_REPO_NAME"
-
-          echo "📂 Copying all files from private-repo/ to public-repo/..."
-          rsync -a --delete --info=NAME private-repo/ public-repo/ | tee copied_files.log
-
-          echo "📄 Files copied:"
-          cat copied_files.log
-
+      - name: Copy Files (Exclude .git and .github)
+        run: |
+          echo "🔄 Copying files from private to public repo..."
+          rsync -a --exclude='.git' --exclude='.github' private-repo/ public-repo/
           echo "✅ Copy complete."
 
-      - name: Commit and Push to Public Repo
+      - name: Commit and Push Changes
         run: |
           cd public-repo
           git config user.name "AutoPublisher Bot"
           git config user.email "bot@github.com"
-
-          # Handle initial commit if the repo is empty
-          if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
-            echo "No commits found. Creating initial commit..."
-            git commit --allow-empty -m "🚀 Initial commit"
-          fi
-
           git add .
-
-          if git diff --cached --quiet; then
-            echo "🟡 Nothing to commit."
-            exit 0
-          else
-            git commit -m "📤 Auto-synced full private repo to public"
+          if ! git diff --cached --quiet; then
+            git commit -m "📤 Auto-synced private repo content"
             git push
-            echo "✅ Public repo updated."
+            echo "✅ Changes pushed to public repo."
+          else
+            echo "🟡 No changes to commit."
           fi
